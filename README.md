@@ -273,4 +273,4 @@ Hardware and software: Apache-2.0 or Solderpad (to match Snitch/cvfpu), decided 
 ## Author & Citation
 
 - **Author:** Ishan Pandey ([isdp0415@gmail.com](mailto:isdp0415@gmail.com))
-- **Repository:** [IshanPandey32/mirex](https://github.com/IshanPandey32/MXDOTP-2)
+- **Repository:** [IshanPandey32/MXDOTP-2](https://github.com/IshanPandey32/MXDOTP-2)
