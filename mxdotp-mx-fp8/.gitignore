@@ -1,0 +1,10 @@
+build/
+vivado/mxdotp_proj/
+vivado/reports/
+*.jou
+*.log
+*.str
+.Xil/
+__pycache__/
+xsim.dir/
+*.wdb
