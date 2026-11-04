@@ -1,0 +1,25 @@
+ncsim(64): 15.20-s086: (c) Copyright 1995-2020 Cadence Design Systems, Inc.
+
+-------------------------------------
+Relinquished control to SimVision...
+ncsim> 
+ncsim> database -open waves -into waves.shm -default
+Created default SHM database waves
+ncsim> probe -create -shm tb_mxdotp_blk32.Aall tb_mxdotp_blk32.Ball tb_mxdotp_blk32.a tb_mxdotp_blk32.acc_in tb_mxdotp_blk32.b tb_mxdotp_blk32.blk_err tb_mxdotp_blk32.checked tb_mxdotp_blk32.clk tb_mxdotp_blk32.errors tb_mxdotp_blk32.expq tb_mxdotp_blk32.fd tb_mxdotp_blk32.first tb_mxdotp_blk32.fmt tb_mxdotp_blk32.i tb_mxdotp_blk32.in_valid tb_mxdotp_blk32.j tb_mxdotp_blk32.last tb_mxdotp_blk32.nvec tb_mxdotp_blk32.o tb_mxdotp_blk32.out_valid tb_mxdotp_blk32.result tb_mxdotp_blk32.rst_n tb_mxdotp_blk32.vec tb_mxdotp_blk32.vecfile tb_mxdotp_blk32.xa tb_mxdotp_blk32.xb
+Created probe 1
+ncsim> run
+Open failed on file "blk_vectors.mem". No such file or directory
+[INFO] blk_vectors.mem not found. Using 2 built-in test blocks.
+PASS : 2 / 2 blocks bit-exact
+Simulation complete via $finish(1) at time 235 NS + 0
+./tb_mxdotp_blk32.v:105         $finish;
+ncsim> ^C
+ncsim> exit
+...Regained control from SimVision
+-------------------------------------
+ncsim: Memory Usag^C
+ncsim> exit
+...Regained control from SimVision
+-------------------------------------
+ncsim: Memory Usage - 38.6M program + 320.3M data = 359.0M total (363.5M Peak)
+ncsim: CPU Usage - 11.3s system + 6.6s user = 17.9s total (1983.1s, 0.9% cpu)
