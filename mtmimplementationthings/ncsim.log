@@ -1,0 +1,93 @@
+ncsim(64): 15.20-s086: (c) Copyright 1995-2020 Cadence Design Systems, Inc.
+
+-------------------------------------
+Relinquished control to SimVision...
+ncsim> 
+ncsim> database -open waves -into waves.shm -default
+Created default SHM database waves
+ncsim> probe -create -shm tb_mxdotp_unit.a tb_mxdotp_unit.acc tb_mxdotp_unit.b tb_mxdotp_unit.checked tb_mxdotp_unit.clk tb_mxdotp_unit.errors tb_mxdotp_unit.expq tb_mxdotp_unit.fd tb_mxdotp_unit.fmt tb_mxdotp_unit.i tb_mxdotp_unit.in_valid tb_mxdotp_unit.nvec tb_mxdotp_unit.o tb_mxdotp_unit.out_valid tb_mxdotp_unit.result tb_mxdotp_unit.rst_n tb_mxdotp_unit.vec tb_mxdotp_unit.vecfile tb_mxdotp_unit.xa tb_mxdotp_unit.xb
+ncsim: *W,PRUASZ: Unpacked array at "tb_mxdotp_unit.expq" of 65536 elements exceeds limit of 16384 - not probed
+ Use 'probe -create -unpacked 65536 tb_mxdotp_unit.expq'.
+ncsim: *E,DBOBBD: Cannot create SHM probe for tb_mxdotp_unit.expq.
+ncsim: *W,PRUASZ: Unpacked array at "tb_mxdotp_unit.vec" of 65536 elements exceeds limit of 16384 - not probed
+ Use 'probe -create -unpacked 65536 tb_mxdotp_unit.vec'.
+ncsim: *E,DBOBBD: Cannot create SHM probe for tb_mxdotp_unit.vec.
+Created probe 1
+ncsim> probe -create -shm tb_mxdotp_unit.expq tb_mxdotp_unit.vec
+ncsim: *W,PRUASZ: Unpacked array at "tb_mxdotp_unit.expq" of 65536 elements exceeds limit of 16384 - not probed
+ Use 'probe -create -unpacked 65536 tb_mxdotp_unit.expq'.
+ncsim: *E,DBOBBD: Cannot create SHM probe for tb_mxdotp_unit.expq.
+ncsim: *W,PRUASZ: Unpacked array at "tb_mxdotp_unit.vec" of 65536 elements exceeds limit of 16384 - not probed
+ Use 'probe -create -unpacked 65536 tb_mxdotp_unit.vec'.
+ncsim: *E,DBOBBD: Cannot create SHM probe for tb_mxdotp_unit.vec.
+ncsim> run
+ncsim: *W,SHMOFU: $shm_open - file waves.shm already in use (SHM database).
+            File: ./tb_mxdotp_unit.v, line = 50, pos = 16
+           Scope: tb_mxdotp_unit
+            Time: 0 FS + 0
+
+ncsim: *W,SHMNOSO: $shm_probe - SHM file not opened with $shm_open.
+            File: ./tb_mxdotp_unit.v, line = 51, pos = 17
+           Scope: tb_mxdotp_unit
+            Time: 0^C
+ncsim> exit
+...Regained control from SimVision
+-------------------------------------
+ncsim: Memory Usage - 38.6M program + 308.1M data = 346.8M total (350.3M Peak)
+ncsim: CPU Usage - 13.5s system + 7.9s user = 21.4s total (2196.0s, 1.0% cpu)
+ result = 0x41000000 (expected 0x41000000)
+[PASS] Vec 2 @ 115000 ns : result = 0x41a00000 (expected 0x41a00000)
+[PASS] Vec 3 @ 125000 ns : result = 0x41000000 (expected 0x41000000)
+[PASS] Vec 4 @ 135000 ns : result = 0x41c80000 (expected 0x41c80000)
+[PASS] Vec 5 @ 145000 ns : result = 0x42800000 (expected 0x42800000)
+[PASS] Vec 6 @ 155000 ns : result = 0x40600000 (expected 0x40600000)
+[PASS] Vec 7 @ 165000 ns : result = 0xc1a00000 (expected 0xc1a00000)
+[PASS] Vec 8 @ 175000 ns : result = 0x80000000 (expected 0x80000000)
+[PASS] Vec 9 @ 185000 ns : result = 0x7f800000 (expected 0x7f800000)
+[PASS] Vec 10 @ 195000 ns : result = 0x7fc00000 (expected 0x7fc00000)
+[PASS] Vec 11 @ 205000 ns : result = 0x41b00000 (expected 0x41b00000)
+==============================================================
+SIMULATION PASSED : 12 / 12 vectors bit-exact!
+==============================================================
+Simulation complete via $finish(1) at time 275 NS + 0
+./tb_mxdotp_unit.v:168         $finish;
+ncsim> reset
+Loaded snapshot worklib.tb_mxdotp_unit:module
+ncsim> reset
+Loaded snapshot worklib.tb_mxdotp_unit:module
+ncsim> run
+ncsim: *W,SHMOFU: $shm_open - file waves.shm already in use (SHM database).
+            File: ./tb_mxdotp_unit.v, line = 50, pos = 16
+           Scope: tb_mxdotp_unit
+            Time: 0 FS + 0
+
+ncsim: *W,SHMNOSO: $shm_probe - SHM file not opened with $shm_open.
+            File: ./tb_mxdotp_unit.v, line = 51, pos = 17
+           Scope: tb_mxdotp_unit
+            Time: 0 FS + 0
+
+Open failed on file "unit_vectors.mem". No such file or directory
+[INFO] External .mem file not found. Using 12 built-in golden test vectors.
+[PASS] Vec 0 @ 95000 ns : result = 0x00000000 (expected 0x00000000)
+[PASS] Vec 1 @ 105000 ns : result = 0x41000000 (expected 0x41000000)
+[PASS] Vec 2 @ 115000 ns : result = 0x41a00000 (expected 0x41a00000)
+[PASS] Vec 3 @ 125000 ns : result = 0x41000000 (expected 0x41000000)
+[PASS] Vec 4 @ 135000 ns : result = 0x41c80000 (expected 0x41c80000)
+[PASS] Vec 5 @ 145000 ns : result = 0x42800000 (expected 0x42800000)
+[PASS] Vec 6 @ 155000 ns : result = 0x40600000 (expected 0x40600000)
+[PASS] Vec 7 @ 165000 ns : result = 0xc1a00000 (expected 0xc1a00000)
+[PASS] Vec 8 @ 175000 ns : result = 0x80000000 (expected 0x80000000)
+[PASS] Vec 9 @ 185000 ns : result = 0x7f800000 (expected 0x7f800000)
+[PASS] Vec 10 @ 195000 ns : result = 0x7fc00000 (expected 0x7fc00000)
+[PASS] Vec 11 @ 205000 ns : result = 0x41b00000 (expected 0x41b00000)
+==============================================================
+SIMULATION PASSED : 12 / 12 vectors bit-exact!
+==============================================================
+Simulation complete via $finish(1) at time 275 NS + 0
+./tb_mxdotp_unit.v:168         $finish;
+ncsim> ^C
+ncsim> exit
+...Regained control from SimVision
+-------------------------------------
+ncsim: Memory Usage - 38.6M program + 311.1M data = 349.7M total (353.3M Peak)
+ncsim: CPU Usage - 2.9s system + 1.8s user = 4.7s total (479.7s, 1.0% cpu)
