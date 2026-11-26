@@ -1,244 +1,234 @@
-# MXFP8 Dot-Product Unit in Verilog — paper re-implementation + block-fused improvement
+# MXDOTP-2: Modular Block-32 OCP MXFP8 Dot-Product Accelerator (45nm CMOS)
 
-Verilog (Vivado-ready) implementation of the **Microscaling (MX) FP8 dot-product-accumulate datapath**
-described in *“MXDOTP: A RISC-V ISA Extension for Enabling Microscaling (MX) Floating-Point Dot Products”*
-(İslamoğlu, Bertaccini, Prasad, Conti, Garofalo, Benini — ASAP 2025, [arXiv:2505.13159](https://arxiv.org/abs/2505.13159)),
-plus an **improved block-level design (MXDOTP-B32)**, self-checking testbenches, exact golden-model scripts and a
-numerical (ML-data) study.
+[](https://github.com/IshanPandey32/MXDOTP-2/tree/main)
 
-> **Status / honesty box — read this first**
-> | Item | State |
-> |---|---|
-> | Algorithm (decode → exact products → window alignment → single RNE) vs. exact arithmetic | ✅ **Executed**: 200 000 random vectors + 24 000 generated vectors, 0 mismatches (`scripts/rtl_model.py`, `scripts/gen_vectors.py`) |
-> | Numerical study (`scripts/accuracy_study.py`) | ✅ **Executed**, numbers below are real |
-> | Verilog RTL + testbenches | ⚠️ **Written as a line-by-line mirror of the validated model, but not yet simulated by me** (no Verilog simulator was available where this was produced). Run `vivado/run_sim.tcl` or `sim/run_iverilog.sh` (or push to GitHub, CI runs it). Expect to fix small tool-specific issues if any appear. |
-> | Area / timing / power of the RTL | ❌ **Not measured.** `vivado/synth_report.tcl` produces them; fill in the table in §7. |
-> | Snitch core integration, SSRs, CSR, ISA encoding (paper §III-B) | ❌ **Not implemented** — this repo covers the arithmetic datapath (the paper’s §III-A) only. |
+
+
+
+**MXDOTP-2** is a standalone Verilog RTL implementation and 45nm CMOS ASIC evaluation of an **OCP Microscaling Floating-Point (MXFP8)** dot-product accelerator. It re-implements the modular arithmetic datapath from İslamoğlu et al. (*"MXDOTP: A RISC-V ISA Extension for Enabling Microscaling (MX) Floating-Point Dot Products"*, ASAP 2025, arXiv:2505.13159) as a clean baseline (`mxdotp_unit`), and introduces a **block-32 fused architecture (`mxdotp_blk32` / MXDOTP-B32)** that defers FP32 normalization and rounding to once per 32-element MX block.
 
 ---
 
-## 1. Repository layout
+## 1. Project Status & Verification Scorecard
 
-```
-.
-├── rtl/
-│   ├── common/
-│   │   ├── fp8_decode.v          # FP8 (E5M2/E4M3) -> {sign, 4b significand, 5b exponent, flags}
-│   │   ├── mxdotp_dot8.v         # STAGE 1: 8 lanes, 4x4 multipliers, exact fixed-point sum T
-│   │   └── mxdotp_addround.v     # STAGES 2+3: align acc, add, normalise, RNE round, specials
-│   ├── baseline/
-│   │   └── mxdotp_unit.v         # paper-style MXDOTP: 1 beat = 8 elements, 3-stage pipeline
-│   └── improved/
-│       └── mxdotp_blk32.v        # IMPROVED: 4 beats (32-element MX block) fused, 1 rounding/block
-├── tb/
-│   ├── tb_mxdotp_unit.v          # self-checking TB (baseline)
-│   └── tb_mxdotp_blk32.v         # self-checking TB (improved)
-├── scripts/
-│   ├── mx_ref.py                 # EXACT golden reference (Fractions, single rounding)
-│   ├── rtl_model.py              # bit-accurate Python mirror of the RTL algorithm + self-check
-│   ├── gen_vectors.py            # writes sim/vectors/*.mem (directed + random + ML-style)
-│   ├── mx_quant.py               # NumPy MX quantiser (E5M2/E4M3, E8M0 scales, block 32)
-│   └── accuracy_study.py         # ML-style numerical study of quantisation + accumulation error
-├── sim/
-│   ├── run_iverilog.sh           # open-source simulation flow
-│   └── vectors/                  # generated *.mem golden vectors (committed so Vivado works out-of-the-box)
-├── vivado/
-│   ├── create_project.tcl        # builds the Vivado project
-│   ├── run_sim.tcl               # runs both testbenches in xsim (batch)
-│   └── synth_report.tcl          # out-of-context synthesis: area/timing/power of both designs
-├── .github/workflows/ci.yml      # model check + iverilog simulation + study on every push
-├── Makefile  requirements.txt  LICENSE  .gitignore
-```
+| Component | Status | Verification & Tooling Summary |
+| :--- | :--- | :--- |
+| **Golden Reference Model (`scripts/rtl_model.py`, `gen_vectors.py`)** | Completed | 200,000 random test cases + 24,000 generated vectors (20,000 beats + 4,000 blocks), **0 mismatches** |
+| **Numerical Accuracy Study (`scripts/accuracy_study.py`)** | Completed | Relative RMS error evaluated for E4M3 and E5M2 across per-tensor FP8, MX block-32, SW FP32, Baseline, and B32 |
+| **Baseline RTL (`mxdotp_unit.v`) — Cadence `ncsim`** | Passed | **12 / 12** golden vectors bit-exact (`mtmimplementationthings/ncsim.log`, 275 ns) |
+| **Innovation RTL (`mxdotp_blk32.v`) — Cadence `ncsim`** | Passed | **2 / 2** full 32-element blocks bit-exact (`mtm_innoinnovation/ncsim.log`, 235 ns) |
+| **45nm ASIC Synthesis (Cadence Genus 21.14)** | Completed | Synthesized at `slow_vdd1v0 1.0` (`PVT_0P9V_125C`), 5.0 ns (200 MHz) target clock for both designs |
+| **Physical Implementation (Cadence Innovus)** | Completed | Place-and-route logs and chip layout captures archived in `mtmimplementationthings/` and `mtm_innoinnovation/` |
+| **Snitch Core / SSR / CSR / RISC-V ISA Integration** | Out of Scope | Standalone arithmetic datapath only (paper §III-A) |
 
-## 2. Quick start
+---
 
-```bash
-pip install -r requirements.txt            # numpy only
-python3 scripts/rtl_model.py               # algorithm vs exact reference  -> "0 mismatches"
-python3 scripts/gen_vectors.py             # (re)generate sim/vectors/*.mem
-python3 scripts/accuracy_study.py          # ML-style numerical study
-```
+## 2. Repository Structure
 
-### Vivado (GUI)
-1. *Create Project → RTL Project*, add `rtl/common/*.v`, `rtl/baseline/*.v`, `rtl/improved/*.v` as **design sources**.
-2. Add `tb/*.v` as **simulation sources** and add `sim/vectors/unit_vectors.mem`, `blk_vectors.mem` as simulation sources too.
-3. *Simulation Settings → xsim → Simulate → `xsim.simulate.xsim.more_options`*: set
-   `-testplusarg VEC=<absolute path>/sim/vectors/unit_vectors.mem` (or `.../blk_vectors.mem` for the other TB).
-   (If you skip this, the TB looks for `unit_vectors.mem` / `blk_vectors.mem` in the simulation working directory.)
-4. Set `tb_mxdotp_unit` (or `tb_mxdotp_blk32`) as simulation top → *Run Simulation → Run All*.
-   Console must end with `PASS : N / N vectors bit-exact`.
+| Path | Description |
+| :--- | :--- |
+| `mxdotp-mx-fp8/rtl/common/` | Shared arithmetic primitives: `fp8_decode.v`, `mxdotp_dot8.v`, `mxdotp_addround.v` |
+| `mxdotp-mx-fp8/rtl/baseline/` | Baseline 8-element/beat datapath (`mxdotp_unit.v`) |
+| `mxdotp-mx-fp8/rtl/improved/` | Proposed block-32 fused datapath (`mxdotp_blk32.v`) |
+| `mxdotp-mx-fp8/tb/` | Verilog testbenches for baseline and block-32 designs |
+| `mxdotp-mx-fp8/scripts/` | Bit-exact Python golden model (`rtl_model.py`), vector generator (`gen_vectors.py`), MX quantizer (`mx_quant.py`), and accuracy study (`accuracy_study.py`) |
+| `mxdotp-mx-fp8/sim/` & `vivado/` | Icarus Verilog runner (`run_iverilog.sh`) and Vivado Tcl synthesis script (`synth_report.tcl`) |
+| `mtmimplementationthings/` | Baseline 45nm ASIC artifacts: `mxdotp_unit.v`, `constraint.sdc`, `area.rpt`, `power.rpt`, `timing.rpt`, `ncsim.log`, `innovus.log`, and 10 visual captures |
+| `mtm_innoinnovation/` | Innovation (`MXDOTP-B32`) 45nm ASIC artifacts: `mxdotp_blk32.v`, `constraint.sdc`, `area.rpt`, `power.rpt`, `timing.rpt`, `ncsim.log`, `innovus.log`, and 9 visual captures |
 
-### Vivado (Tcl, one shot)
-```bash
-vivado -mode batch -source vivado/create_project.tcl
-vivado -mode batch -source vivado/run_sim.tcl        # both testbenches
-vivado -mode batch -source vivado/synth_report.tcl   # area / timing / power -> vivado/reports/
-```
+---
 
-### Icarus Verilog (no Vivado needed)
-```bash
-make sim        # or ./sim/run_iverilog.sh
-```
+## 3. Architecture & Block-32 Fused Innovation
 
-## 3. Background: what the paper does and what is reproduced
+### 3.1 OCP MXFP8 Dot-Product Formulation
 
-**Microscaling (MX)**: blocks of 32 low-precision elements share one power-of-two scale (E8M0, 8 bit); each element
-keeps its own small exponent (here MXFP8: **E5M2** or **E4M3**). The OCP MX dot product is
+Under the **OCP Microscaling Formats (MX) v1.0** specification, a 32-element block shares a single 8-bit E8M0 scale factor (`Xa`, `Xb`) across 32 FP8 elements (`Pa,i`, `Pb,i` in E4M3 or E5M2):
 
-```
-Dot(A,B) = Xa · Xb · Σ_{i=1..k} Pa_i · Pb_i          result accumulated in FP32
-```
+$$\text{Dot}(A, B) = X_a \cdot X_b \cdot \sum_{i=1}^{k} P_{a,i} \cdot P_{b,i}$$
 
-**Paper idea (§III-A)**: fuse scaling + 8-element dot product + FP32 accumulation into one unit, using
-*early accumulation* — add the shifted FP32 accumulator to the sum of products in **fixed point**, convert/round once.
-The paper uses an FP9 (E5M3) intermediate, a 95-bit fixed-point sum with anchor 34, RNE, 3 pipeline stages,
-8 elements per 64-bit operand, one result per cycle.
+### 3.2 Shared RTL Core (`mxdotp-mx-fp8/rtl/common/`)
 
-| Concept | Paper | This repo (`rtl/baseline`) |
-|---|---|---|
-| Elements per instruction | 8 × FP8 in 64 bit | same (`a[63:0]`, `b[63:0]`) |
-| Formats | E5M2 + E4M3 via CSR | E5M2 + E4M3 via `fmt` pin |
-| Scales | 2 × E8M0 | 2 × E8M0 (`xa`, `xb`), 0xFF → NaN |
-| Product representation | FP9 (E5M3) | 4-bit integer significand × shared exponent `eb−18` (both formats map to one grid) |
-| Early accumulation | 95-bit fixed point, anchor 34 | 72-bit exact product sum `T` (LSB = 2⁻³⁴) + 132-bit accumulator window with sticky |
-| Rounding | RNE, FP32 | RNE, FP32, gradual underflow, overflow→Inf |
-| Pipeline | 3 stages, 1 result/cycle | 3 stages, 1 result/cycle |
-| Operand delivery | SSRs + merged scale/acc | **not modelled** (ports `xa`, `xb`, `acc` are separate) |
+| Module | Pipeline Role | Key Architectural Parameters |
+| :--- | :--- | :--- |
+| `fp8_decode.v` | Unified FP8 decoder | Normalizes both E5M2 and E4M3 into a unified 4-bit significand and 5-bit effective exponent |
+| `mxdotp_dot8.v` | Stage 1 exact 8-way dot product | Computes exact 8-element integer products and aligns into a 72-bit two's-complement fixed-point sum (`TW = 72`) |
+| `mxdotp_addround.v` | Stages 2–3 FP32 accumulate & round | 132-bit fixed-point alignment (`SW = 132`, `DMAX = 73`), addition with FP32 accumulator (`OT = 32`), leading-one detection (LOD), and Round-to-Nearest-Even (RNE) |
 
-## 4. Baseline architecture (`mxdotp_unit`)
+### 3.3 Baseline (`mxdotp_unit`) vs. Innovation (`mxdotp_blk32` / MXDOTP-B32)
 
-```
- a[63:0] b[63:0] fmt                 xa xb                                 acc[31:0]
-    │      │                          │  │                                    │
-┌───▼──────▼──────────┐          ┌────▼──▼────┐                                │
-│ 8 × fp8_decode (A,B)│          │ S=xa+xb-254│                                │
-│ 8 × (4b × 4b) mult  │          └─────┬──────┘                                │
-│ shift by eb_a+eb_b-2│                │                                       │
-│ signed sum → T (72b)│                │         ── pipeline reg 1 ──          │
-└──────────┬──────────┘                │                                       │
-           └───────────────┬───────────┴──────────────────┬────────────────────┘
-                     ┌─────▼────────────────────────────  ▼ ─────────────┐
- STAGE 2             │ place acc (24b) into 132-bit window at bit 32+d,    │
- align + add         │ d = e_acc − S − 116 ; far-away operands → sticky    │
-                     │ W = ±acc_aligned + T<<32 ; sign/magnitude           │
-                     └───────────────────────┬────────────────────────────┘
-                                             │            ── pipeline reg 2 ──
-                     ┌───────────────────────▼────────────────────────────┐
- STAGE 3             │ leading-one detect → exponent, RNE round (G,S bits), │
- normalise + round   │ subnormal/overflow handling, NaN/Inf/±0 rules        │
-                     └───────────────────────┬────────────────────────────┘
-                                             ▼  result[31:0]  (pipeline reg 3)
-```
+| Architectural Feature | Baseline: `mxdotp_unit` | Innovation: `mxdotp_blk32` (`MXDOTP-B32`) |
+| :--- | :--- | :--- |
+| **Throughput per Beat** | 8 MXFP8 elements / beat | 8 MXFP8 elements / beat |
+| **MX Block Granularity** | Beat-level (4 independent beats per 32-element block) | Block-level fused (4 beats accumulated per 32-element MX block) |
+| **Rounding & Normalization Events / 32 Elements** | **4** (`mxdotp_addround` fires every beat) | **1** (`mxdotp_addround` fires once on `last` beat — **4x reduction**) |
+| **Intermediate Accumulation** | Immediate FP32 alignment + RNE rounding every 8 elements | Exact 72-bit running fixed-point accumulator (`t_run[71:0]`) across 4 beats |
+| **Block Framing & Protocol Safety** | Beat-level valid handshake | Explicit `first` / `last` beat tags with built-in `blk_err` protocol violation detection |
+| **Primary Hardware Advantage** | Lower combinational depth & smaller register footprint | 4x fewer FP32 align/normalize/round activations; enables clock gating on `u_addround` |
 
-**Key equations** (all arithmetic *exact* until the single final rounding):
+---
 
-* element → `value = (−1)^s · M · 2^(eb−18)`, `M` = 4-bit significand, `eb` = effective biased exponent
-  (E5M2: `e_eff`; E4M3: `e_eff + 8`, so one datapath serves both).
-* product lane `= (Ma·Mb) << (eba+ebb−2)` in units of 2⁻³⁴; `T = Σ ±lane` (72 bit suffices for 32 products).
-* `result = RNE_fp32( acc + 2^(Xa+Xb−254) · T · 2⁻³⁴ )`.
-* Accumulator alignment: `d = e_acc − S − 116`. If `d > 73` the product sum can only act as a rounding **sticky**
-  (±1 at the window LSB); if the accumulator is far below the products it is shifted right with a sticky bit
-  (`OT = 32` guard bits make both cases rounding-exact). `T == 0` bypasses the window (`acc + 0 = acc`).
-* Special values: any NaN, `Inf·0`, `+Inf + −Inf`, E8M0 scale `0xFF` → canonical qNaN `0x7FC00000`;
-  `±Inf` propagate; `−0` only if every term is a negative zero; exact cancellation → `+0`.
+## 4. Verification & Numerical Accuracy Results
 
-## 5. Improvement: MXDOTP-B32 (`rtl/improved/mxdotp_blk32.v`)
+### 4.1 Functional Verification Summary
 
-**Observation.** The baseline performs *align → normalise → round* after **every** 8-element beat, i.e. four times per
-32-element MX block, and chains the FP32 accumulator through the 3-stage pipeline (loop-carried latency of 3 cycles
-→ software must interleave ≥3 independent accumulators/outputs to keep the unit busy).
+| Verification Stage | Design Under Test | Vector / Test Scope | Result | Source Log |
+| :--- | :--- | :--- | :--- | :--- |
+| **Python Golden Model** | Both (`rtl_model.py`) | 200,000 random cases | **0 mismatches** | `mxdotp-mx-fp8/scripts/rtl_model.py` |
+| **Generated Vector Suite** | Both (`gen_vectors.py`) | 20,000 beats + 4,000 blocks (24,000 total) | **0 mismatches** | `mxdotp-mx-fp8/scripts/gen_vectors.py` |
+| **Cadence `ncsim(64) 15.20-s086`** | Baseline (`mxdotp_unit`) | 12 built-in golden vectors (`tb_mxdotp_unit.v`) | **PASS: 12 / 12 bit-exact** (275 ns) | [ncsim.log](https://www.google.com/search?q=mtmimplementationthings/ncsim.log) |
+| **Cadence `ncsim(64) 15.20-s086`** | Innovation (`mxdotp_blk32`) | 2 built-in 32-element blocks (`tb_mxdotp_blk32.v`) | **PASS: 2 / 2 blocks bit-exact** (235 ns) | [ncsim.log](https://www.google.com/search?q=mtm_innoinnovation/ncsim.log) |
 
-**Techniques**
+### 4.2 Numerical Accuracy Study (`accuracy_study.py`, seed 0, `--sigma 1.0`)
 
-1. **Deferred normalisation / block-level fusion.** The *exact* fixed-point sums `T` of up to 4 beats are accumulated in a
-   72-bit register (a small Kulisch-style exact accumulator; one 72-bit adder per beat). The expensive 132-bit
-   alignment shifter, leading-one detector and rounder run **once per MX block** (4× fewer activations).
-2. **Single rounding per block.** One rounding instead of four; no double-rounding accumulation of the 4 beats.
-3. **Dependency decoupling.** Beats of a block chain only through the narrow `T` register (1 cycle), not through the
-   FP32 pipeline. The FP32 accumulator is consumed once per block (`acc_in` sampled on the `last` beat). With 4-beat blocks and
-   a 3-cycle add/round latency, back-to-back blocks do not stall on the previous block’s result (design reasoning;
-   not covered by a dedicated testbench yet).
-4. **Hardware block control + protocol checker.** `first/last` tags replace the software beat loop; `blk_err`
-   flags a scale change inside a block or more than 4 beats (would exceed the 72-bit range).
+Relative RMS error comparing quantization error against accumulation error:
 
-**Interface per block** (same `xa`, `xb`, `fmt` for all beats): beat 0 `first=1`; beat 3 `last=1` and `acc_in` = running FP32
-sum; result after 3 cycles, `blk_err` aligned with `out_valid`. 1–4 beats per block are allowed.
+| Format | Per-Tensor FP8 Quant. Error | MX (Block 32) Quant. Error | Accum. Error: SW FP8 → FP32 | Baseline: MXDOTP (Round / 8) | Innovation: MXDOTP-B32 (Round / 32) |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **E4M3** | `3.85e-2` | `4.75e-2` | `1.57e-7` | `1.63e-7` | **`1.56e-7`** |
+| **E5M2** | `7.84e-2` | `8.15e-2` | `8.62e-8` | `8.72e-8` | **`8.63e-8`** |
 
-**Methodology** (how the work was done, in order)
+**Presentation Takeaway:** FP8 quantization noise ($\sim 10^{-2}$) dominates FP32 accumulation rounding error ($\sim 10^{-7}$) by five orders of magnitude. While `MXDOTP-B32` slightly improves accumulation accuracy (matching software FP32 to $1.56\times 10^{-7}$ for E4M3 and $8.63\times 10^{-8}$ for E5M2), its primary engineering value is **architectural efficiency**: reducing expensive FP32 alignment, LOD, and RNE rounding operations by **4x per MX block**.
 
-1. *Specification extraction* from the paper + OCP MX v1.0 (formats, E8M0, accumulation precision implementation-defined).
-2. *Golden reference first* (`mx_ref.py`): exact Fraction arithmetic, single RNE, full special-value policy.
-3. *Algorithm mirror* (`rtl_model.py`): the same integer algorithm with the *same bit widths* as the RTL; validated against
-   the golden model with random + corner-case + cancellation + extreme-scale vectors (this found and fixed one bug:
-   E4M3 subnormal exponent re-bias). Widths (`TW=72, OT=32, DMAX=73, SW=132`) were derived analytically (see §4) and then confirmed by test.
-4. *RTL written as a line-by-line translation of the mirror*, shared sub-modules for baseline and improved designs so the
-   comparison isolates the architectural change.
-5. *Vector-based self-checking testbenches* with expected values from the exact model; random idle bubbles test valid-pipelining.
-6. *Numerical study on ML-style data* to quantify what the accumulation scheme costs/gains (§6).
-7. *Synthesis comparison* (`synth_report.tcl`) to evaluate the area/timing trade-off (§7, to be filled by you).
+---
 
-## 6. Machine-learning / numerics part
+## 5. 45nm CMOS ASIC Synthesis Results (Cadence Genus 21.14)
 
-The RTL itself needs **no** ML. ML enters in two places:
+Both designs were synthesized using **Cadence Genus 21.14** targeting the 45nm standard-cell library at the **`slow_vdd1v0 1.0` (`PVT_0P9V_125C`)** worst-case corner with a **5.0 ns (200 MHz)** clock constraint.
 
-* **Test data realism**: `gen_vectors.py` includes “ML-style” blocks — Gaussian activations/weights with log-normal outlier
-  channels, quantised with the real MX rules in `mx_quant.py` — so the datapath sees realistic exponent distributions, not just uniform random bits.
-* **Numerical study** (`accuracy_study.py`): C = A·B (16×4096 · 4096×16), compared on identical MX-quantised operands.
+### 5.1 Area, Power, and Timing Comparison
 
-Measured (seed 0, `--sigma 1.0`; relative RMS error):
+| Synthesis Metric | Baseline: `mxdotp_unit` | Innovation: `mxdotp_blk32` | Delta (B32 vs. Baseline) |
+| :--- | :---: | :---: | :---: |
+| **Target Clock Period / Freq** | 5,000 ps (200 MHz) | 5,000 ps (200 MHz) | Same constraint |
+| **Total Standard Cell Count** | 9,438 | 13,731 | +4,293 (+45.5%) |
+| **Total Cell Area (µm²)** | 18,926.605 | 26,033.160 | +7,106.555 (+37.5%) |
+| **Net Area** | 0.000 | 0.000 | — |
+| **Key Submodule Breakdown** | `u_dot8` (`mxdotp_dot8_TW72`): 3,176 cells, 6,895.404 µm² | `u_addround` (`mxdotp_addround_TW72`): 9,018 cells, 15,310.092 µm² | `u_addround` dominates area |
+| **Leakage Power (W)** | `4.07577e-07` (0.03%) | `6.20459e-07` (0.03%) | +52.2% |
+| **Internal Power (W)** | `1.05039e-03` (73.68%) | `1.57733e-03` (69.80%) | +50.2% |
+| **Switching Power (W)** | `3.74734e-04` (26.29%) | `6.81879e-04` (30.17%) | +82.0% |
+| **Total Power (mW)** | **1.426 mW** (`1.42553e-03 W`) | **2.260 mW** (`2.25983e-03 W`) | +0.834 mW (+58.5%, vectorless) |
+| **Worst Negative Slack (WNS)** | **0 ps (MET)** | **-1,324 ps (VIOLATION)** | -1,324 ps |
+| **Data Arrival + Setup Time** | 4,923 ps + 77 ps = 5,000 ps | 6,205 ps + 120 ps = 6,324 ps | Effective Fmax ≈ **158.1 MHz** |
+| **Critical Path** | `u_addround_s2_mag_reg[48]/CK` → `u_addround_result_reg[22]/D` | `u_addround/s1_t_mag_reg[36]/CK` → `u_addround/result_reg[30]/D` | Bottleneck inside `u_addround` |
+| **Rounding Events / 32 Elements** | **4** | **1** | **-75% (4x fewer)** |
 
-| Format | Per-tensor FP8 quant. error | MX (block 32) quant. error | Accum. error: SW FP8→FP32 | MXDOTP (round/8) | MXDOTP-B32 (round/32) |
-|---|---|---|---|---|---|
-| E4M3 | 3.85e-2 | 4.75e-2 | 1.57e-7 | 1.63e-7 | 1.56e-7 |
-| E5M2 | 7.84e-2 | 8.15e-2 | 8.62e-8 | 8.72e-8 | 8.63e-8 |
+### 5.2 Key Engineering Trade-Offs (Presentation Talking Points)
 
-**What this honestly says**
+1. **Why vectorless power is higher in `mxdotp_blk32`:** Cadence Genus default power analysis uses uniform vectorless switching activity without clock gating on `u_addround`. Because `u_addround` accounts for 9,018 of 13,731 cells (58.8% of total area) yet only needs to compute on 1 out of every 4 cycles (`last == 1`), adding operand isolation or clock gating on `u_addround` directly unlocks the 4x activity reduction in real block-32 workloads.
+2. **Why `mxdotp_blk32` misses 200 MHz by 1,324 ps:** The critical path runs inside `u_addround` (`s1_t_mag_reg[36]` → `result_reg[30]`, 6.324 ns total, corresponding to ~158.1 MHz at worst-case 0.9V / 125°C). Adding a pipeline register stage across the wide 132-bit shifter/LOD boundary in `mxdotp_addround.v` will close timing at 200 MHz+.
+3. **Area overhead:** The +37.5% cell area in `mxdotp_blk32` stems from the 72-bit running accumulator (`t_run[71:0]`), block-framing control/error logic (`first`, `last`, `blk_err`), and boundary preservation around `u_addround`.
 
-* FP8 *quantisation* error (~10⁻²) dwarfs FP32 *accumulation* error (~10⁻⁷). Fewer roundings (B32) therefore give **no
-  meaningful accuracy gain**; the justification for B32 is **hardware activity (4× fewer align/normalise/round operations),
-  dependency/latency behaviour and simpler control — not accuracy.** Whether that yields area/energy benefits must be confirmed by synthesis (§7).
-* On this synthetic data MX block scaling did **not** beat per-tensor scaling at the matmul-output level (the output is
-  dominated by large elements, which both schemes represent well). MX’s accuracy advantage reported in the literature
-  (OCP/Microsoft) comes from real LLM/CNN tensors with wide intra-tensor dynamic range; to test that claim, feed real tensors
-  (e.g. exported PyTorch weights/activations) into `mx_quant.py` — a natural next step.
-* B8/B32 are emulated with float64 chunk sums + one FP32 rounding; the RTL is verified bit-exactly by the testbenches.
+---
 
-## 7. Results table to fill in after running `synth_report.tcl`
+## 6. Side-by-Side Visual Quick Reference (For Live Presentation)
 
-| Design | LUTs | FFs | DSP | Fmax @ xc7a100t (WNS at 10 ns) | Rounding events / 32 elements |
-|---|---|---|---|---|---|
-| `mxdotp_unit` (baseline, 4 beats) | _fill_ | _fill_ | _fill_ | _fill_ | 4 |
-| `mxdotp_blk32` (improved) | _fill_ | _fill_ | _fill_ | _fill_ | 1 |
+Use this table during presentations or reviews to compare Baseline (`mxdotp_unit`) and Innovation (`mxdotp_blk32`) results side by side.
 
-Note: the improved module adds a 72-bit accumulator + control; the shared align/normalise logic is not duplicated. Expect the
-combinational depth of stage 2/3 (132-bit shifters) to dominate timing for both; if it fails 100 MHz, split stage 3 or reduce `OT/SW`.
+| Stage | Baseline: `mxdotp_unit` (`mtmimplementationthings/`) | Innovation: `mxdotp_blk32` (`mtm_innoinnovation/`) |
+| :--- | :---: | :---: |
+| **Simulation Waveform** |  |  |
+| **Synthesized Schematic** |  |  |
+| **Gate Count / Area** |  |  |
+| **Power Report** |  |  |
+| **Timing Report** |  |  |
 
-## 8. Verification summary
+---
 
-* Exact reference vs algorithm mirror: 200 000 random cases (8 and 32 elements, both formats, subnormals, NaN/Inf, E8M0 extremes 0/254/255, forced cancellation, subnormal/zero accumulators) → 0 mismatches.
-* Vector files: 20 000 beats + 4 000 blocks (19 directed corner cases each, 45 % random patterns, 55 % ML-style).
-* Testbenches compare every output bit-exactly (including the canonical NaN) and check that the number of outputs equals the number of inputs.
+## 7. Baseline Implementation Gallery (`mtmimplementationthings/`)
 
-## 9. Known limitations / future work
+**Raw Reports & Design Files:** [mxdotp\_unit.v](https://www.google.com/search?q=mtmimplementationthings/mxdotp_unit.v) | [constraint.sdc](https://www.google.com/search?q=mtmimplementationthings/constraint.sdc) | [area.rpt](https://www.google.com/search?q=mtmimplementationthings/area.rpt) | [power.rpt](https://www.google.com/search?q=mtmimplementationthings/power.rpt) | [timing.rpt](https://www.google.com/search?q=mtmimplementationthings/timing.rpt) | [ncsim.log](https://www.google.com/search?q=mtmimplementationthings/ncsim.log) | [innovus.log](https://www.google.com/search?q=mtmimplementationthings/innovus.log)
 
-* No Snitch/RISC-V integration (SSR streaming, CSR, instruction encoding from paper §III-B).
-* Only MXFP8; MXFP6/MXFP4 (more lanes per 64-bit word) and MXINT8 are natural extensions of `fp8_decode`/`mxdotp_dot8`.
-* Blocks > 4 beats need `TW` > 72 (parameterised; `blk_err` flags the violation).
-* Single wide combinational stages (shifters) — retime or add pipeline registers for higher clock rates.
-* Directed testbench for back-to-back blocks with real accumulator feedback (acc_in = previous result).
+### 7.1 Functional Simulation Waveform (`ncsim`)
 
-## 10. Publishing on GitHub
+
+### 7.2 Synthesized RTL Schematic (Full & Zoomed)
+
+
+
+
+### 7.3 Gate Count & Mapped Standard-Cell Netlist
+
+
+
+
+### 7.4 Power, Timing & Critical Path Analysis
+
+
+
+
+
+
+### 7.5 Additional Baseline Implementation Captures
+
+
+
+
+---
+
+## 8. Innovation (`MXDOTP-B32`) Gallery (`mtm_innoinnovation/`)
+
+**Raw Reports & Design Files:** [mxdotp\_blk32.v](https://www.google.com/search?q=mtm_innoinnovation/mxdotp_blk32.v) | [constraint.sdc](https://www.google.com/search?q=mtm_innoinnovation/constraint.sdc) | [area.rpt](https://www.google.com/search?q=mtm_innoinnovation/area.rpt) | [power.rpt](https://www.google.com/search?q=mtm_innoinnovation/power.rpt) | [timing.rpt](https://www.google.com/search?q=mtm_innoinnovation/timing.rpt) | [ncsim.log](https://www.google.com/search?q=mtm_innoinnovation/ncsim.log) | [innovus.log](https://www.google.com/search?q=mtm_innoinnovation/innovus.log)
+
+### 8.1 Functional Simulation Waveform (`ncsim`)
+
+
+### 8.2 Synthesized RTL Schematic (Full & Zoomed)
+
+
+
+
+### 8.3 Gate Count & Mapped Standard-Cell Netlist
+
+
+
+
+### 8.4 Power & Timing Analysis
+
+
+
+
+### 8.5 Physical Chip Layout (Cadence Innovus — Full & Zoomed)
+
+
+
+
+---
+
+## 9. Quick Start & Reproduction
+
+All Python scripts, RTL sources, and open-source simulation flows reside inside `mxdotp-mx-fp8/`:
 
 ```bash
 cd mxdotp-mx-fp8
-git init && git add . && git commit -m "MXFP8 dot-product unit (paper re-implementation) + MXDOTP-B32 improvement"
-git branch -M main
-git remote add origin https://github.com/<you>/mxdotp-mx-fp8.git
-git push -u origin main
+
+# 1. Run the bit-exact Python golden model self-check (200,000 random cases)
+python3 scripts/rtl_model.py
+
+# 2. Generate 20,000 beat vectors + 4,000 block-32 vectors
+python3 scripts/gen_vectors.py
+
+# 3. Reproduce the E4M3 / E5M2 numerical accuracy study
+python3 scripts/accuracy_study.py
+
+# 4. Run open-source RTL simulation with Icarus Verilog
+bash sim/run_iverilog.sh
 ```
-Before pushing: put your name in `LICENSE`, and fill in §7 with your own synthesis numbers.
 
-## 11. Credits
+For FPGA synthesis (Vivado) or ASIC reproduction, see `mxdotp-mx-fp8/vivado/synth_report.tcl` and the Cadence constraints/reports in `mtmimplementationthings/` and `mtm_innoinnovation/`.
 
-Architecture inspired by İslamoğlu et al., *MXDOTP* (ASAP 2025); formats per the OCP *Microscaling Formats (MX) v1.0* specification.
-This is an independent re-implementation from the published description — **cite the paper** in any report or publication that uses this work.
+---
+
+## 10. Known Limitations & Future Work
+
+- **Clock Gating / Operand Isolation:** Gate `u_addround` in `mxdotp_blk32` during beats 0–2 (`last == 0`) and run SAIF/VCD activity-annotated power analysis to measure dynamic power savings from the 4x rounding reduction.
+- **Timing Closure at 200 MHz+:** Pipeline the wide 132-bit combinational shifter/LOD path inside `mxdotp_addround.v` to eliminate the `-1,324 ps` violation on `mxdotp_blk32`.
+- **Larger Block Sizes:** Blocks exceeding 4 beats (>32 elements) require widening the fixed-point accumulator beyond `TW = 72`.
+- **Format & System Expansion:** Extend beyond MXFP8 (E4M3/E5M2) to MXFP6/MXFP4 and integrate with a RISC-V Snitch/SSR host pipeline.
+
+---
+
+## 11. Credits & References
+
+- **Baseline Architecture:** İslamoğlu et al., *"MXDOTP: A RISC-V ISA Extension for Enabling Microscaling (MX) Floating-Point Dot Products"*, IEEE ASAP 2025 (arXiv:2505.13159).
+- **Format Standard:** Open Compute Project (OCP), *Microscaling Formats (MX) Specification v1.0*.
