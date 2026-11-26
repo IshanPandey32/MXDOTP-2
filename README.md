@@ -205,3 +205,6 @@ For FPGA synthesis (Vivado) or ASIC reproduction, see `mxdotp-mx-fp8/vivado/synt
 
 - **Baseline Architecture:** İslamoğlu et al., *"MXDOTP: A RISC-V ISA Extension for Enabling Microscaling (MX) Floating-Point Dot Products"*, IEEE ASAP 2025 (arXiv:2505.13159).
 - **Format Standard:** Open Compute Project (OCP), *Microscaling Formats (MX) Specification v1.0*.
+
+
+Contributors: Divyansh Rawat and Ishan Pandey
