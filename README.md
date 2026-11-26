@@ -1,13 +1,6 @@
 # MXDOTP-2: Modular Block-32 OCP MXFP8 Dot-Product Accelerator (45nm CMOS)
 
-[](https://github.com/IshanPandey32/MXDOTP-2/tree/main)
-
-
-
-
 **MXDOTP-2** is a standalone Verilog RTL implementation and 45nm CMOS ASIC evaluation of an **OCP Microscaling Floating-Point (MXFP8)** dot-product accelerator. It re-implements the modular arithmetic datapath from İslamoğlu et al. (*"MXDOTP: A RISC-V ISA Extension for Enabling Microscaling (MX) Floating-Point Dot Products"*, ASAP 2025, arXiv:2505.13159) as a clean baseline (`mxdotp_unit`), and introduces a **block-32 fused architecture (`mxdotp_blk32` / MXDOTP-B32)** that defers FP32 normalization and rounding to once per 32-element MX block.
-
----
 
 ## 1. Project Status & Verification Scorecard
 
@@ -21,8 +14,6 @@
 | **Physical Implementation (Cadence Innovus)** | Completed | Place-and-route logs and chip layout captures archived in `mtmimplementationthings/` and `mtm_innoinnovation/` |
 | **Snitch Core / SSR / CSR / RISC-V ISA Integration** | Out of Scope | Standalone arithmetic datapath only (paper §III-A) |
 
----
-
 ## 2. Repository Structure
 
 | Path | Description |
@@ -35,8 +26,6 @@
 | `mxdotp-mx-fp8/sim/` & `vivado/` | Icarus Verilog runner (`run_iverilog.sh`) and Vivado Tcl synthesis script (`synth_report.tcl`) |
 | `mtmimplementationthings/` | Baseline 45nm ASIC artifacts: `mxdotp_unit.v`, `constraint.sdc`, `area.rpt`, `power.rpt`, `timing.rpt`, `ncsim.log`, `innovus.log`, and 10 visual captures |
 | `mtm_innoinnovation/` | Innovation (`MXDOTP-B32`) 45nm ASIC artifacts: `mxdotp_blk32.v`, `constraint.sdc`, `area.rpt`, `power.rpt`, `timing.rpt`, `ncsim.log`, `innovus.log`, and 9 visual captures |
-
----
 
 ## 3. Architecture & Block-32 Fused Innovation
 
@@ -65,8 +54,6 @@ $$\text{Dot}(A, B) = X_a \cdot X_b \cdot \sum_{i=1}^{k} P_{a,i} \cdot P_{b,i}$$
 | **Block Framing & Protocol Safety** | Beat-level valid handshake | Explicit `first` / `last` beat tags with built-in `blk_err` protocol violation detection |
 | **Primary Hardware Advantage** | Lower combinational depth & smaller register footprint | 4x fewer FP32 align/normalize/round activations; enables clock gating on `u_addround` |
 
----
-
 ## 4. Verification & Numerical Accuracy Results
 
 ### 4.1 Functional Verification Summary
@@ -88,8 +75,6 @@ Relative RMS error comparing quantization error against accumulation error:
 | **E5M2** | `7.84e-2` | `8.15e-2` | `8.62e-8` | `8.72e-8` | **`8.63e-8`** |
 
 **Presentation Takeaway:** FP8 quantization noise ($\sim 10^{-2}$) dominates FP32 accumulation rounding error ($\sim 10^{-7}$) by five orders of magnitude. While `MXDOTP-B32` slightly improves accumulation accuracy (matching software FP32 to $1.56\times 10^{-7}$ for E4M3 and $8.63\times 10^{-8}$ for E5M2), its primary engineering value is **architectural efficiency**: reducing expensive FP32 alignment, LOD, and RNE rounding operations by **4x per MX block**.
-
----
 
 ## 5. 45nm CMOS ASIC Synthesis Results (Cadence Genus 21.14)
 
@@ -119,8 +104,6 @@ Both designs were synthesized using **Cadence Genus 21.14** targeting the 45nm s
 2. **Why `mxdotp_blk32` misses 200 MHz by 1,324 ps:** The critical path runs inside `u_addround` (`s1_t_mag_reg[36]` → `result_reg[30]`, 6.324 ns total, corresponding to ~158.1 MHz at worst-case 0.9V / 125°C). Adding a pipeline register stage across the wide 132-bit shifter/LOD boundary in `mxdotp_addround.v` will close timing at 200 MHz+.
 3. **Area overhead:** The +37.5% cell area in `mxdotp_blk32` stems from the 72-bit running accumulator (`t_run[71:0]`), block-framing control/error logic (`first`, `last`, `blk_err`), and boundary preservation around `u_addround`.
 
----
-
 ## 6. Side-by-Side Visual Quick Reference (For Live Presentation)
 
 Use this table during presentations or reviews to compare Baseline (`mxdotp_unit`) and Innovation (`mxdotp_blk32`) results side by side.
@@ -132,8 +115,6 @@ Use this table during presentations or reviews to compare Baseline (`mxdotp_unit
 | **Gate Count / Area** |  |  |
 | **Power Report** |  |  |
 | **Timing Report** |  |  |
-
----
 
 ## 7. Baseline Implementation Gallery (`mtmimplementationthings/`)
 
@@ -164,8 +145,6 @@ Use this table during presentations or reviews to compare Baseline (`mxdotp_unit
 
 
 
----
-
 ## 8. Innovation (`MXDOTP-B32`) Gallery (`mtm_innoinnovation/`)
 
 **Raw Reports & Design Files:** [mxdotp\_blk32.v](https://www.google.com/search?q=mtm_innoinnovation/mxdotp_blk32.v) | [constraint.sdc](https://www.google.com/search?q=mtm_innoinnovation/constraint.sdc) | [area.rpt](https://www.google.com/search?q=mtm_innoinnovation/area.rpt) | [power.rpt](https://www.google.com/search?q=mtm_innoinnovation/power.rpt) | [timing.rpt](https://www.google.com/search?q=mtm_innoinnovation/timing.rpt) | [ncsim.log](https://www.google.com/search?q=mtm_innoinnovation/ncsim.log) | [innovus.log](https://www.google.com/search?q=mtm_innoinnovation/innovus.log)
@@ -193,8 +172,6 @@ Use this table during presentations or reviews to compare Baseline (`mxdotp_unit
 
 
 
----
-
 ## 9. Quick Start & Reproduction
 
 All Python scripts, RTL sources, and open-source simulation flows reside inside `mxdotp-mx-fp8/`:
@@ -217,16 +194,12 @@ bash sim/run_iverilog.sh
 
 For FPGA synthesis (Vivado) or ASIC reproduction, see `mxdotp-mx-fp8/vivado/synth_report.tcl` and the Cadence constraints/reports in `mtmimplementationthings/` and `mtm_innoinnovation/`.
 
----
-
 ## 10. Known Limitations & Future Work
 
 - **Clock Gating / Operand Isolation:** Gate `u_addround` in `mxdotp_blk32` during beats 0–2 (`last == 0`) and run SAIF/VCD activity-annotated power analysis to measure dynamic power savings from the 4x rounding reduction.
 - **Timing Closure at 200 MHz+:** Pipeline the wide 132-bit combinational shifter/LOD path inside `mxdotp_addround.v` to eliminate the `-1,324 ps` violation on `mxdotp_blk32`.
 - **Larger Block Sizes:** Blocks exceeding 4 beats (>32 elements) require widening the fixed-point accumulator beyond `TW = 72`.
 - **Format & System Expansion:** Extend beyond MXFP8 (E4M3/E5M2) to MXFP6/MXFP4 and integrate with a RISC-V Snitch/SSR host pipeline.
-
----
 
 ## 11. Credits & References
 
